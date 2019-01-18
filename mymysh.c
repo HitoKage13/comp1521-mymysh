@@ -1,7 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 8 (06/10)
+// Version 9 (06/10)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -266,7 +266,7 @@ int main(int argc, char *argv[], char *envp[]) {
                     }
                     free(filePath);
                 }
-                printf("Executing command: %s\n",command);
+                printf("Running %s ...\n",command);
                 printf("--------------------\n");
             } else {
                 printf("%s: Command not found\n",args[0]);
@@ -492,7 +492,7 @@ void execute(char **args, char **path, char **envp) {
 
     if (command != NULL) {
         if (execve(command,args,envp) == -1) {
-            printf("Exec failed\n");
+            printf("%s: unknown type of executable\n",command);
         }
     }
 
