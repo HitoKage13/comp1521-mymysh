@@ -1,6 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
-// Completed by <<YOU>>, September/October 2018
+// Completed by Jeremy Lim (z5209627), September/October 2018
+// Version 1 (21/09)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -30,6 +31,8 @@ void freeTokens(char **);
 char *findExecutable(char *, char **);
 int isExecutable(char *);
 void prompt(void);
+void execute(char **args, char **path, char **envp);
+void printDir();
 
 
 // Global Constants
@@ -78,7 +81,13 @@ int main(int argc, char *argv[], char *envp[])
    prompt();
    while (fgets(line, MAXLINE, stdin) != NULL) {
       trim(line); // remove leading/trailing space
-
+      if (!strcmp(line,"exit"))
+          break;
+      if (!strcmp(line,"pwd")) {
+          printDir();
+          prompt();
+          continue;
+      }
       // TODO
       // Code to implement mainloop goes here
       // Uses
@@ -86,11 +95,25 @@ int main(int argc, char *argv[], char *envp[])
       // - showCommandHistory()
       // - and many other functions
       // TODO
+      char **args = tokenise(line," ");
+      pid = fork();
 
+      if (pid < 0) {
+          fprintf(stderr, "Failed to create child process\n");
+          exit(1);
+      } else if (pid > 0) {
+          wait(&stat);
+          freeTokens(args);
+      } else {
+          execute(args,path,envp);
+      }
+      /* if ()
+          addToCommandHistory();
+      showCommandHistory(); */
       prompt();
    }
-   saveCommandHistory();
-   cleanCommandHistory();
+   /* saveCommandHistory();
+   cleanCommandHistory(); */
    printf("\n");
    return(EXIT_SUCCESS);
 }
@@ -100,6 +123,7 @@ int main(int argc, char *argv[], char *envp[])
 char **fileNameExpand(char **tokens)
 {
    // TODO
+   return NULL;
 }
 
 // findExecutable: look for executable in PATH
@@ -214,4 +238,57 @@ int strContains(char *str, char *chars)
 void prompt(void)
 {
    printf("mymysh$ ");
+}
+
+
+// execute: run a program, given command-line args, path and envp
+void execute(char **args, char **path, char **envp)
+{
+   // TODO: implement the find-the-executable and execve() it code
+   //    args = tokenise the command line
+    char* command = NULL;
+//    if (args[0] starts with '/' or '.') {
+    if (args[0][0] == '/' || args[0][0] == '.') {
+//    check if the file called args[0] is executable
+        if (isExecutable(args[0]))
+            command = strdup(args[0]);
+//    if so, use args[0] as the command
+    } else {
+        int i = 0;
+        for (i = 0; path[i] != NULL; i++) {
+//       see if an executable file called "D/args[0]" exists
+            char* filePath = malloc(strlen(path[i]) + strlen(args[0]) + 2);
+            strcpy(filePath, path[i]);
+            strcat(filePath, "/");
+            strcat(filePath, args[0]);
+//       if it does, use that file name as the command
+            if (isExecutable(filePath)) {
+                command = strdup(filePath);
+                free(filePath);
+                break;
+            }
+            free(filePath);
+        }
+    }
+    if (command == NULL) {
+        printf("Command not found\n");
+    } else {
+//    print the full name of the command being executed
+        printf("Executing command: %s\n",command);
+        printf("--------------------\n");
+//    use execve() to attempt to run the command with args and envp
+        if (execve(command,args,envp) == -1)
+            printf("Exec failed\n");
+//    if doesn't run, perror("Exec failed")
+    }
+// exit the child process
+    exit(EXIT_SUCCESS);
+}
+
+void printDir() {
+    char directory[MAXLINE];
+    if (getcwd(directory, sizeof(directory)) != NULL)
+        printf("Working directory: %s\n",directory);
+    else
+       perror("getcwd() error");
 }
