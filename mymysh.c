@@ -1,7 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 1 (21/09)
+// Version 2 (24/09)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -78,44 +78,76 @@ int main(int argc, char *argv[], char *envp[])
    // main loop: print prompt, read line, execute command
 
    char line[MAXLINE];
+   // char *file;
+   // strcpy(file,"$HOME/.mymysh_history");
+   // FILE *fp = fopen(file,"a");
    prompt();
    while (fgets(line, MAXLINE, stdin) != NULL) {
-      trim(line); // remove leading/trailing space
-      if (!strcmp(line,"exit"))
-          break;
-      if (!strcmp(line,"pwd")) {
-          printDir();
-          prompt();
-          continue;
-      }
-      // TODO
-      // Code to implement mainloop goes here
-      // Uses
-      // - addToCommandHistory()
-      // - showCommandHistory()
-      // - and many other functions
-      // TODO
-      char **args = tokenise(line," ");
-      pid = fork();
+        trim(line); // remove leading/trailing space
 
-      if (pid < 0) {
-          fprintf(stderr, "Failed to create child process\n");
-          exit(1);
-      } else if (pid > 0) {
-          wait(&stat);
-          freeTokens(args);
-      } else {
-          execute(args,path,envp);
-      }
-      /* if ()
-          addToCommandHistory();
-      showCommandHistory(); */
-      prompt();
-   }
-   /* saveCommandHistory();
-   cleanCommandHistory(); */
-   printf("\n");
-   return(EXIT_SUCCESS);
+        //   if empty command, ignore
+        // handle ! history substitution
+        // tokenise
+        // handle *?[~ filename expansion
+        // handle shell built-ins
+        // check for input/output redirections
+        // find executable using first token
+        // if none, then Command not found
+        // sort out any redirections
+        // run the command
+        // print prompt
+
+        // Built-in commands
+        if (!strcmp(line,"exit")) {
+            break;
+        } else if (!strcmp(line,"h") || !strcmp(line,"history")) {
+            // showCommandHistory(fp);
+            addToCommandHistory(line,cmdNo);
+            prompt();
+            continue;
+        } else if (!strcmp(line,"pwd")) {
+            printDir();
+            addToCommandHistory(line,cmdNo);
+            prompt();
+            continue;
+        } else if (!strcmp(line,"")) {
+            prompt();
+            continue;
+        } else if (!strcmp(line,"debug")) {
+            debug();
+        }
+
+        // TODO
+        // Code to implement mainloop goes here
+        // Uses
+        // - addToCommandHistory()
+        // - showCommandHistory()
+        // - and many other functions
+        // TODO
+
+        // Read and execute commands
+        char **args = tokenise(line," ");
+        pid = fork();
+
+        if (pid < 0) {
+            fprintf(stderr, "Failed to create child process\n");
+            exit(1);
+        } else if (pid > 0) {
+            wait(&stat);
+            freeTokens(args);
+        } else {
+            execute(args,path,envp);
+        }
+        printf("--------------------\n");
+        printf("Return 0\n");
+        addToCommandHistory(line,cmdNo);
+        cmdNo++;
+        prompt();
+    }
+    // saveCommandHistory();
+    // cleanCommandHistory();
+    printf("\n");
+    return(EXIT_SUCCESS);
 }
 
 // fileNameExpand: expand any wildcards in command-line args
@@ -271,7 +303,7 @@ void execute(char **args, char **path, char **envp)
         }
     }
     if (command == NULL) {
-        printf("Command not found\n");
+        printf("%s: Command not found\n",args[0]);
     } else {
 //    print the full name of the command being executed
         printf("Executing command: %s\n",command);
@@ -285,10 +317,11 @@ void execute(char **args, char **path, char **envp)
     exit(EXIT_SUCCESS);
 }
 
+// Prints current working directory.
 void printDir() {
     char directory[MAXLINE];
     if (getcwd(directory, sizeof(directory)) != NULL)
-        printf("Working directory: %s\n",directory);
+        printf("%s\n",directory);
     else
        perror("getcwd() error");
 }
