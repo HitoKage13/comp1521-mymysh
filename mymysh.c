@@ -1,7 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 7 (06/10)
+// Version 8 (06/10)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -86,8 +86,15 @@ int main(int argc, char *argv[], char *envp[]) {
             continue;
         }
 
+        if (strchr(line,'|') != NULL) {
+            printf("Pipelines not implemented\n");
+            prompt();
+            continue;
+        }
+
         // ! History substitution
         int histNo;
+
         if (line[0] == '!') {
             // For if the command is '!!', '!!!', etc.
             if (line[1] == '!') {
@@ -97,7 +104,11 @@ int main(int argc, char *argv[], char *envp[]) {
             else {
                 char *number = &line[1];
                 histNo = atoi(number);
-                if (histNo >= cmdNo - 20 && histNo < cmdNo) {
+                if (histNo == 0) {
+                    printf("Invalid history substitution\n");
+                    prompt();
+                    continue;
+                } else if (histNo >= cmdNo - 20 && histNo < cmdNo) {
                     strcpy(line,getCommandFromHistory(histNo));
                     printf("%s\n",line);
                 } else if (histNo < cmdNo - 20 || histNo > cmdNo) {
@@ -143,7 +154,11 @@ int main(int argc, char *argv[], char *envp[]) {
                 chdir(homedir);
                 printDir();
             } else {
-                chdir(args[1]);
+                if (chdir(args[1]) == -1) {
+                    printf("%s: No such file or directory\n",args[1]);
+                } else {
+                    printDir();
+                }
             }
             addToCommandHistory(line,cmdNo);
             cmdNo++;
@@ -155,20 +170,58 @@ int main(int argc, char *argv[], char *envp[]) {
         int j = 0;
         int in = 0;
         int out = 0;
+        int counter = 0;
 
-        if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
+        while (args[j] != NULL) {
+            if (!strcmp(args[j],"<") || !strcmp(args[j],">")) {
+                counter++;
+            }
+            j++;
+        }
+
+        // If there is more than 1 redirection in the line
+        if (counter > 1) {
+            printf("Invalid i/o redirection\n");
+            prompt();
+            continue;
+        }
+
+        j = 0;
+
+        while (args[j] != NULL) {
+            // Firstly, it checks for more than 1 redirection
+
             // Input
-            if (strchr(line,'<') != NULL) {
-                while (strcmp(args[j],"<") != 0) {
-                    j++;
-                }
+            if (!strcmp(args[j],"<")) {
                 in = 1;
+                break;
             } // Output
-            else if (strchr(line,'>') != NULL) {
-                while (strcmp(args[j],">") != 0) {
-                    j++;
-                }
+            else if (!strcmp(args[j],">")) {
                 out = 1;
+                break;
+            }
+
+            j++;
+        }
+
+        if (in || out) {
+            // For case when the second last token is not '<' or '>'
+            if (args[j+2] != NULL) {
+                printf("Invalid i/o redirection\n");
+                prompt();
+                continue;
+            }
+
+            // For case when the file does not exist
+            if (in) {
+                int wowFd = open(args[j+1],O_RDONLY);
+                if (access(args[j+1],R_OK) == 0) {
+                    close(wowFd);
+                } else {
+                    printf("Input redirection: No such file or directory\n");
+                    prompt();
+                    continue;
+                }
             }
         }
 
@@ -230,36 +283,33 @@ int main(int argc, char *argv[], char *envp[]) {
             freeTokens(args);
         } else {
             // This is the child process
+
             // Sorts out redirections
             if (in) {
-                int inFd = open(args[j+1],O_WRONLY|O_CREAT,0666);
-                if (args[j+2] == NULL) {
-                    if (access(args[j+1],W_OK) == 0) {
-                        if (dup2(inFd,0) < 0) {
-                            prompt();
-                            continue;
-                        }
-
-                        free(args[j]);
-                        args[j] = NULL;
-                        free(args[j+1]);
-                        args[j+1] = NULL;
+                int inFd = open(args[j+1],O_RDONLY);
+                if (access(args[j+1],R_OK) == 0) {
+                    if (dup2(inFd,0) < 0) {
+                        prompt();
+                        continue;
                     }
+
+                    free(args[j]);
+                    args[j] = NULL;
+                    free(args[j+1]);
+                    args[j+1] = NULL;
                 }
             } else if (out) {
                 int outFd = open(args[j+1],O_WRONLY|O_CREAT,0666);
-                if (args[j+2] == NULL) {
-                    if (access(args[j+1],W_OK) == 0) {
-                        if (dup2(outFd,1) < 0) {
-                            prompt();
-                            continue;
-                        }
-
-                        free(args[j]);
-                        args[j] = NULL;
-                        free(args[j+1]);
-                        args[j+1] = NULL;
+                if (access(args[j+1],W_OK) == 0) {
+                    if (dup2(outFd,1) < 0) {
+                        prompt();
+                        continue;
                     }
+
+                    free(args[j]);
+                    args[j] = NULL;
+                    free(args[j+1]);
+                    args[j+1] = NULL;
                 }
             }
 
