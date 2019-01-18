@@ -1,7 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 2 (24/09)
+// Version 3 (27/09)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,7 +31,7 @@ void freeTokens(char **);
 char *findExecutable(char *, char **);
 int isExecutable(char *);
 void prompt(void);
-void execute(char **args, char **path, char **envp);
+int execute(char **args, char **path, char **envp);
 void printDir();
 
 
@@ -70,19 +70,22 @@ int main(int argc, char *argv[], char *envp[])
       printf("path[%d] = %s\n",i,path[i]);
 #endif
 
-   // initialise command history
-   // - use content of ~/.mymysh_history file if it exists
+    // initialise command history
+    // - use content of ~/.mymysh_history file if it exists
 
-   cmdNo = initCommandHistory();
+    cmdNo = initCommandHistory();
 
-   // main loop: print prompt, read line, execute command
+    // main loop: print prompt, read line, execute command
 
-   char line[MAXLINE];
-   // char *file;
-   // strcpy(file,"$HOME/.mymysh_history");
-   // FILE *fp = fopen(file,"a");
-   prompt();
-   while (fgets(line, MAXLINE, stdin) != NULL) {
+    char line[MAXLINE];
+    char temp[MAXLINE];
+    char *file;
+    file = strdup(".mymysh_history");
+    FILE *fp = fopen(file,"a");
+    prompt();
+    while (fgets(line, MAXLINE, stdin) != NULL) {
+        int flag = 1;
+        strcpy(temp,line);
         trim(line); // remove leading/trailing space
 
         //   if empty command, ignore
@@ -101,13 +104,15 @@ int main(int argc, char *argv[], char *envp[])
         if (!strcmp(line,"exit")) {
             break;
         } else if (!strcmp(line,"h") || !strcmp(line,"history")) {
-            // showCommandHistory(fp);
+            showCommandHistory(fp);
             addToCommandHistory(line,cmdNo);
+            cmdNo++;
             prompt();
             continue;
         } else if (!strcmp(line,"pwd")) {
             printDir();
             addToCommandHistory(line,cmdNo);
+            cmdNo++;
             prompt();
             continue;
         } else if (!strcmp(line,"")) {
@@ -136,16 +141,20 @@ int main(int argc, char *argv[], char *envp[])
             wait(&stat);
             freeTokens(args);
         } else {
-            execute(args,path,envp);
+            flag = execute(args,path,envp);
         }
-        printf("--------------------\n");
-        printf("Return 0\n");
-        addToCommandHistory(line,cmdNo);
-        cmdNo++;
+
+        if (flag == 1) {
+            printf("--------------------\n");
+            printf("Return 0\n");
+            addToCommandHistory(line,cmdNo);
+            cmdNo++;
+        }
         prompt();
     }
-    // saveCommandHistory();
-    // cleanCommandHistory();
+    saveCommandHistory();
+    cleanCommandHistory();
+    fclose(fp);
     printf("\n");
     return(EXIT_SUCCESS);
 }
@@ -274,10 +283,13 @@ void prompt(void)
 
 
 // execute: run a program, given command-line args, path and envp
-void execute(char **args, char **path, char **envp)
+int execute(char **args, char **path, char **envp)
 {
-   // TODO: implement the find-the-executable and execve() it code
-   //    args = tokenise the command line
+    // TODO: implement the find-the-executable and execve() it code
+    //    args = tokenise the command line
+
+    // Used to denote if success or failed.
+    int flag = 1;
     char* command = NULL;
 //    if (args[0] starts with '/' or '.') {
     if (args[0][0] == '/' || args[0][0] == '.') {
@@ -304,17 +316,21 @@ void execute(char **args, char **path, char **envp)
     }
     if (command == NULL) {
         printf("%s: Command not found\n",args[0]);
+        flag = 0;
+        return flag;
     } else {
 //    print the full name of the command being executed
         printf("Executing command: %s\n",command);
         printf("--------------------\n");
 //    use execve() to attempt to run the command with args and envp
-        if (execve(command,args,envp) == -1)
+        if (execve(command,args,envp) == -1) {
             printf("Exec failed\n");
 //    if doesn't run, perror("Exec failed")
+        }
     }
 // exit the child process
     exit(EXIT_SUCCESS);
+    return flag;
 }
 
 // Prints current working directory.
