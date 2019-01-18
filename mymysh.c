@@ -1,7 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 5 (30/09)
+// Version 6 (01/10)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,7 +31,7 @@ void freeTokens(char **);
 char *findExecutable(char *, char **);
 int isExecutable(char *);
 void prompt(void);
-int execute(char **args, char **path, char **envp);
+void execute(char **args, char **path, char **envp, int flag[]);
 void printDir();
 
 
@@ -75,6 +75,7 @@ int main(int argc, char *argv[], char *envp[])
     cmdNo = initCommandHistory();
     // main loop: print prompt, read line, execute command
 
+    int flag[1];
     char line[MAXLINE];
     /* char *file = malloc(MAXLINE*sizeof(char));
     file = getenv("HOME");
@@ -82,7 +83,7 @@ int main(int argc, char *argv[], char *envp[])
     FILE *fp = fopen(file,"a"); */
     prompt();
     while (fgets(line, MAXLINE, stdin) != NULL) {
-        int flag = 1;
+        flag[0] = 1;
         trim(line); // remove leading/trailing space
         //   if empty command, ignore
         // handle ! history substitution
@@ -103,68 +104,39 @@ int main(int argc, char *argv[], char *envp[])
         }
 
         // ! History substitution
-        /* if (!strcmp(line[0],"!")) {
-            if (!strcmp(line[1],"!")) {
-                snprintf(line,MAXLINE,"%s",getCommandFromHistory(cmdNo-1));
-            } else if (valid number) {
-                find the command
-                line = getCommandFromHistory(command);
-            } else if (invalid number) {
-                printf("No command #%d\n",command number);
-                prompt();
-                continue;
+        int histNo;
+        if (line[0] == '!') {
+            // For if the command is '!!', '!!!', etc.
+            if (line[1] == '!') {
+                strcpy(line,getCommandFromHistory(cmdNo-1));
+                printf("%s\n",line);
+            } // To get the seqNumber from command history.
+            else {
+                char *number = &line[1];
+                histNo = atoi(number);
+                if (histNo >= cmdNo - 20 && histNo < cmdNo) {
+                    strcpy(line,getCommandFromHistory(histNo));
+                    printf("%s\n",line);
+                } else if (histNo < cmdNo - 20 || histNo > cmdNo) {
+                    printf("No command #%d\n",histNo);
+                    prompt();
+                    continue;
+                }
             }
-        }*/
+        }
 
         // Tokenise
         char **args = tokenise(line," ");
 
-        // Expand filename wildcards
         i = 0;
-        int j = 0;
-        char *s = malloc((2*(MAXLINE+1)*sizeof(char)));
 
+        // Expand filename wildcards
         if (strchr(line,'*') != NULL || strchr(line,'?') != NULL
         || strchr(line,'[') != NULL || strchr(line,'~') != NULL) {
-            while (args[i] != NULL) {
-                if (strchr(args[i],'*') != NULL || strchr(args[i],'?') != NULL
-                || strchr(args[i],'[') != NULL || strchr(args[i],'~') != NULL) {
-                    glob_t globbuf = {0};
-                    glob(args[i], GLOB_NOCHECK|GLOB_TILDE, NULL, &globbuf);
-                    int j = 0;
-                    while (j != globbuf.gl_pathc) {
-                        strcat(s,globbuf.gl_pathv[j]);
-                        strcat(s," ");
-                        j++;
-                    }
-
-                } else if (i == 0) {
-                    strcpy(s,args[i]);
-                    strcat(s," ");
-                } else {
-                    strcat(s,args[i]);
-                    strcat(s," ");
-                }
-                i++;
-            }
-            printf("bloop\n");
-            args = tokenise(s," ");
+            args = fileNameExpand(args);
         }
 
-        /* if (strchr(line,"*") != NULL || strchr(line,"?") != NULL
-        || strchr(line,"[") != NULL || strchr(line,"~") != NULL) {
-            if (strchr(line,"*") != NULL) {
-                glob("*",GLOB_TILDE,)
-            } else if (strchr(line,"?") != NULL) {
-
-            } else if (strchr(line,"[") != NULL) {
-
-            } else if (strchr(line,"~") != NULL) {
-                glob("~",GLOB_TILDE)
-            }
-        } */
-
-        // Built-in commands
+        // Built-in shell commands
         if (!strcmp(line,"exit")) {
             saveCommandHistory();
             cleanCommandHistory();
@@ -184,9 +156,8 @@ int main(int argc, char *argv[], char *envp[])
             continue;
         } else if (!strcmp(args[0],"cd")) {
             if (!strcmp(line,"cd")) {
-                printf("bloop de scoop\n");
-                char *test = strdup(getenv("HOME"));
-                chdir(test);
+                char *homedir = strdup(getenv("HOME"));
+                chdir(homedir);
                 printDir();
             } else {
                 chdir(args[1]);
@@ -200,167 +171,33 @@ int main(int argc, char *argv[], char *envp[])
         }
 
         // Check for input/output redirections (WIP)
-        // j = 0;
-        int k = 0;
+        int j = 0;
+        int in = 0;
+        int out = 0;
 
-        /* if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
+        if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
             // Input
-            printf("wowee\n");
             if (strchr(line,'<') != NULL) {
                 while (strcmp(args[j],"<") != 0) {
                     j++;
                 }
-                int fd1[2];
-                int fd2[2];
-                if (!strcmp(args[j+2],"\0")) {
-                    int length = 0;
-                    while (k < j) {
-                        length = length + strlen(args[k]);
-                        k++;
-                    }
-                    k = 0;
-                    char *string = malloc((length+1)*sizeof(char));
-                    char *read_string = malloc((length+1)*sizeof(char));
-                    while (k < j) {
-                        if (k == 0) {
-                            strcpy(string,args[k]);
-                        } else {
-                            strcat(string,args[k]);
-                        }
-                        k++;
-                    }
-                    if (pipe(fd1) < 0) {
-                        printf("error\n");
-                        prompt();
-                        continue;
-                    }
-
-                    if (pipe(fd2) < 0) {
-                        printf("error\n");
-                        prompt();
-                        continue;
-                    }
-
-                    pid = fork();
-                    if (pid < 0) {
-                        printf("error\n");
-                        prompt();
-                        continue;
-                    }
-                    if (pid > 0) {
-                        close(fd1[0]);
-                        write(fd1[1],string,strlen(string)+1);
-                        close(fd1[1]);
-                        wait(NULL);
-                        close(fd2[1]);
-                        read(fd2[0],read_string,strlen(read_string+1));
-                        close(fd2[0]);
-                    } else {
-                        close(fd1[1]);
-                        read(fd1[0],read_string,strlen(read_string+1));
-                        k = 0;
-                        close(fd1[0]);
-                        close(fd2[0]);
-                        write(fd2[1],read_string,strlen(read_string+1));
-                        close(fd2[1]);
-                    }
-
-                    addToCommandHistory(line,cmdNo);
-                    cmdNo++;
-                    prompt();
-                    continue;
-                }
+                in = 1;
             } // Output
             else if (strchr(line,'>') != NULL) {
-                printf("wowzers\n");
                 while (strcmp(args[j],">") != 0) {
                     j++;
                 }
-                printf("wack\n");
-                printf("args[j-1] = %s\n",args[j-1]);
-                printf("args[j+1] = %s\n",args[j+1]);
-                /* if (!strcmp(args[j+2],"\0")) {
-                    printf("testu\n");
-                    int in = open(args[j-1],O_RDONLY);
-                    dup2(in,STDIN_FILENO);
-                    close(in);
-                    int out = open(args[j+1],O_WRONLY|O_CREAT,0666);
-                    dup2(out,STDOUT_FILENO);
-                    close(out);
-                //}
+                out = 1;
             }
-        } */
+        }
 
-        // Unused version (tbc)
-        /* if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
-            // Input
-            if (strchr(line,'<') != NULL) {
-                while (!strcmp(args[j],"<")) {
-                    j++;
-                }
-                int fd1[2];
-                int fd2[2];
-                if (!strcmp(args[j+2],"\0")) {
-                    int length = 0;
-                    while (k < j) {
-                        length = length + strlen(args[k]);
-                        k++;
-                    }
-                    k = 0;
-                    char *string = malloc((length+1)*sizeof(char));
-                    char *read_string = malloc((length+1)*sizeof(char));
-                    while (k < j) {
-                        if (k == 0) {
-                            strcpy(string,args[k]);
-                        } else {
-                            strcat(string,args[k]);
-                        }
-                        k++;
-                    }
-                    if (pipe(fd1) < 0) {
-                        printf("error\n");
-                        prompt();
-                        continue;
-                    }
-
-                    if (pipe(fd2) < 0) {
-                        printf("error\n");
-                        prompt();
-                        continue;
-                    }
-
-                    pid = fork();
-                    if (pid < 0) {
-                        printf("error\n");
-                        prompt();
-                        continue;
-                    }
-                    if (pid > 0) {
-                        close(fd1[0]);
-                        write(fd1[1],string,strlen(string)+1);
-                        close(fd1[1]);
-                        wait(NULL);
-                        close(fd2[1]);
-                        read(fd2[0],read_string,strlen(read_string+1));
-                        close(fd2[0]);
-                    } else {
-                        close(fd1[1]);
-                        read(fd1[0],read_string,strlen(read_string+1));
-                        k = 0;
-                        close(fd1[0]);
-                        close(fd2[0]);
-                        write(fd2[1],read_string,strlen(read_string+1));
-                        close(fd2[1]);
-                    }
-
-                    addToCommandHistory(line,cmdNo);
-                    cmdNo++;
-                    prompt();
-                    continue;
-                }
-            } // Output
-            else if ()
-        } */
+        // Unused > code
+        /* int input = open(args[j-1],O_RDONLY);
+        dup2(input,STDIN_FILENO);
+        close(input);
+        int output = open(args[j+1],O_WRONLY|O_CREAT,0666);
+        dup2(output,STDOUT_FILENO);
+        close(output); */
 
         // TODO
         // Code to implement mainloop goes here
@@ -380,14 +217,46 @@ int main(int argc, char *argv[], char *envp[])
             wait(&stat);
             freeTokens(args);
         } else {
-            execute(args,path,envp);
-        }
+            // Sort out redirections
+            if (in) {
+                int inFd = open(args[j+1],O_WRONLY|O_CREAT,0666);
+                if (args[j+2] == NULL) {
+                    if (access(args[j+1],W_OK) == 0) {
+                        if (dup2(inFd,0) < 0) {
+                            prompt();
+                            continue;
+                        }
 
-        if (flag == 1) {
-            printf("--------------------\n");
-            printf("Return 0\n");
-            addToCommandHistory(line,cmdNo);
-            cmdNo++;
+                        free(args[j]);
+                        args[j] = NULL;
+                        free(args[j+1]);
+                        args[j+1] = NULL;
+                    }
+                }
+            } else if (out) {
+                int outFd = open(args[j+1],O_WRONLY|O_CREAT,0666);
+                if (args[j+2] == NULL) {
+                    if (access(args[j+1],W_OK) == 0) {
+                        if (dup2(outFd,1) < 0) {
+                            prompt();
+                            continue;
+                        }
+
+                        free(args[j]);
+                        args[j] = NULL;
+                        free(args[j+1]);
+                        args[j+1] = NULL;
+                    }
+                }
+            }
+
+            execute(args,path,envp,flag);
+            if (findExecutable(args[0],path) != NULL) {
+                printf("--------------------\n");
+                printf("Return %d\n",WEXITSTATUS(stat));
+                addToCommandHistory(line,cmdNo);
+                cmdNo++;
+            }
         }
 
         prompt();
@@ -403,8 +272,35 @@ int main(int argc, char *argv[], char *envp[])
 // - returns a possibly larger set of tokens
 char **fileNameExpand(char **tokens)
 {
-   // TODO
-   return NULL;
+    int i = 0;
+    char *s = malloc((2*(MAXLINE+1)*sizeof(char)));
+    while (tokens[i] != NULL) {
+        if (strchr(tokens[i],'*') != NULL || strchr(tokens[i],'?') != NULL
+        || strchr(tokens[i],'[') != NULL || strchr(tokens[i],'~') != NULL) {
+            glob_t globbuf = {0};
+            glob(tokens[i], GLOB_NOCHECK|GLOB_TILDE, NULL, &globbuf);
+            int j = 0;
+            // Reiterates through the array of tokens and adds into the string
+            while (j != globbuf.gl_pathc) {
+                strcat(s,globbuf.gl_pathv[j]);
+                strcat(s," ");
+                j++;
+            }
+
+        } else if (i == 0) {
+            strcpy(s,tokens[i]);
+            strcat(s," ");
+        } else {
+            strcat(s,tokens[i]);
+            strcat(s," ");
+        }
+        i++;
+    }
+
+    // Retokenise args
+    char **args = tokenise(s," ");
+    free(s);
+    return args;
 }
 
 // findExecutable: look for executable in PATH
@@ -523,11 +419,10 @@ void prompt(void)
 
 
 // execute: run a program, given command-line args, path and envp
-int execute(char **args, char **path, char **envp)
+void execute(char **args, char **path, char **envp, int flag[])
 {
     // TODO: implement the find-the-executable and execve() it code
     //    args = tokenise the command line
-    int flag = 1;
     // Used to denote if success or failed.
     char* command = NULL;
 //    if (args[0] starts with '/' or '.') {
@@ -555,8 +450,7 @@ int execute(char **args, char **path, char **envp)
     }
     if (command == NULL) {
         printf("%s: Command not found\n",args[0]);
-        flag = 0;
-        return flag;
+        flag[0] = 0;
     } else {
 //    print the full name of the command being executed
         printf("Executing command: %s\n",command);
@@ -569,7 +463,6 @@ int execute(char **args, char **path, char **envp)
     }
 // exit the child process
     exit(EXIT_SUCCESS);
-    return flag;
 }
 
 // Prints current working directory.
