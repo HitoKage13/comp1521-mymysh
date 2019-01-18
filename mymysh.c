@@ -1,7 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 3 (27/09)
+// Version 4 (28/09)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -72,22 +72,18 @@ int main(int argc, char *argv[], char *envp[])
 
     // initialise command history
     // - use content of ~/.mymysh_history file if it exists
-
     cmdNo = initCommandHistory();
-
     // main loop: print prompt, read line, execute command
 
     char line[MAXLINE];
-    char temp[MAXLINE];
-    char *file;
-    file = strdup(".mymysh_history");
-    FILE *fp = fopen(file,"a");
+    /* char *file = malloc(MAXLINE*sizeof(char));
+    file = getenv("HOME");
+    strcat(file,"/.mymysh_history");
+    FILE *fp = fopen(file,"a"); */
     prompt();
     while (fgets(line, MAXLINE, stdin) != NULL) {
         int flag = 1;
-        strcpy(temp,line);
         trim(line); // remove leading/trailing space
-
         //   if empty command, ignore
         // handle ! history substitution
         // tokenise
@@ -100,11 +96,63 @@ int main(int argc, char *argv[], char *envp[])
         // run the command
         // print prompt
 
+        // Empty command
+        if (!strcmp(line,"")) {
+            prompt();
+            continue;
+        }
+
+        // ! History substitution
+        /* if (!strcmp(line[0],"!")) {
+            if (!strcmp(line[1],"!")) {
+                line = getCommandFromHistory(command-1);
+                char **args = tokenise(line," ");
+            } else if (valid number) {
+                find the command
+                line = getCommandFromHistory(command);
+                char **args = tokenise(line," ");
+            } else if (invalid number) {
+                printf("No command #%d\n",command number);
+                prompt();
+                continue;
+            }
+        }*/
+
+        // Tokenise
+        char **args = tokenise(line," ");
+
+        // Expand filename wildcards
+        i = 0;
+        char *s = malloc((2*(MAXSTR+1)*sizeof(char)));
+
+        while (args[i] != NULL) {
+            if (strchr(args[i],"*") != NULL || strchr(args[i],"?") != NULL
+            || strchr(args[i],"[") != NULL || strchr(args[i],"~") != NULL) {
+                glob_t globbuf = {0};
+                glob(args[i], GLOB_NOCHECK|GLOB_TILDE, NULL, &globbuf);
+                int j = 0;
+                while (j != globbuf.gl_pathc) {
+                    strcat(s,globbuf.gl_pathv[j]);
+                    j++;
+                }
+
+            }
+
+            if (i == 0) {
+                strcpy(s,args[i]);
+            } else {
+                strcat(s,args[i]);
+            }
+            i++;
+        }
+
+        //char **args = tokenise(s," ");
+
         // Built-in commands
         if (!strcmp(line,"exit")) {
             break;
         } else if (!strcmp(line,"h") || !strcmp(line,"history")) {
-            showCommandHistory(fp);
+            showCommandHistory();
             addToCommandHistory(line,cmdNo);
             cmdNo++;
             prompt();
@@ -115,12 +163,183 @@ int main(int argc, char *argv[], char *envp[])
             cmdNo++;
             prompt();
             continue;
-        } else if (!strcmp(line,"")) {
+        } else if (!strcmp(args[0],"cd")) {
+            if (!strcmp(line,"cd")) {
+                chdir(getenv("HOME"));
+                printDir();
+            } else {
+                chdir(args[1]);
+            }
+            addToCommandHistory(line,cmdNo);
+            cmdNo++;
             prompt();
             continue;
         } else if (!strcmp(line,"debug")) {
             debug();
         }
+
+        // Check for input/output redirections (WIP)
+        int j = 0;
+        int k = 0;
+
+        if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
+            // Input
+            printf("wowee\n");
+            if (strchr(line,'<') != NULL) {
+                while (strcmp(args[j],"<") != 0) {
+                    j++;
+                }
+                int fd1[2];
+                int fd2[2];
+                if (!strcmp(args[j+2],"\0")) {
+                    int length = 0;
+                    while (k < j) {
+                        length = length + strlen(args[k]);
+                        k++;
+                    }
+                    k = 0;
+                    char *string = malloc((length+1)*sizeof(char));
+                    char *read_string = malloc((length+1)*sizeof(char));
+                    while (k < j) {
+                        if (k == 0) {
+                            strcpy(string,args[k]);
+                        } else {
+                            strcat(string,args[k]);
+                        }
+                        k++;
+                    }
+                    if (pipe(fd1) < 0) {
+                        printf("error\n");
+                        prompt();
+                        continue;
+                    }
+
+                    if (pipe(fd2) < 0) {
+                        printf("error\n");
+                        prompt();
+                        continue;
+                    }
+
+                    pid = fork();
+                    if (pid < 0) {
+                        printf("error\n");
+                        prompt();
+                        continue;
+                    }
+                    if (pid > 0) {
+                        close(fd1[0]);
+                        write(fd1[1],string,strlen(string)+1);
+                        close(fd1[1]);
+                        wait(NULL);
+                        close(fd2[1]);
+                        read(fd2[0],read_string,strlen(read_string+1));
+                        close(fd2[0]);
+                    } else {
+                        close(fd1[1]);
+                        read(fd1[0],read_string,strlen(read_string+1));
+                        k = 0;
+                        close(fd1[0]);
+                        close(fd2[0]);
+                        write(fd2[1],read_string,strlen(read_string+1));
+                        close(fd2[1]);
+                    }
+
+                    addToCommandHistory(line,cmdNo);
+                    cmdNo++;
+                    prompt();
+                    continue;
+                }
+            } // Output
+            else if (strchr(line,'>') != NULL) {
+                printf("wowzers\n");
+                while (strcmp(args[j],">") != 0) {
+                    j++;
+                }
+                printf("wack\n");
+                printf("args[j-1] = %s\n",args[j-1]);
+                printf("args[j+1] = %s\n",args[j+1]);
+                /* if (!strcmp(args[j+2],"\0")) {
+                    printf("testu\n"); */
+                    int in = open(args[j-1],O_RDONLY);
+                    dup2(in,STDIN_FILENO);
+                    close(in);
+                    int out = open(args[j+1],O_WRONLY|O_CREAT,0666);
+                    dup2(out,STDOUT_FILENO);
+                    close(out);
+                //}
+            }
+        }
+
+        // Unused version (tbc)
+        /* if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
+            // Input
+            if (strchr(line,'<') != NULL) {
+                while (!strcmp(args[j],"<")) {
+                    j++;
+                }
+                int fd1[2];
+                int fd2[2];
+                if (!strcmp(args[j+2],"\0")) {
+                    int length = 0;
+                    while (k < j) {
+                        length = length + strlen(args[k]);
+                        k++;
+                    }
+                    k = 0;
+                    char *string = malloc((length+1)*sizeof(char));
+                    char *read_string = malloc((length+1)*sizeof(char));
+                    while (k < j) {
+                        if (k == 0) {
+                            strcpy(string,args[k]);
+                        } else {
+                            strcat(string,args[k]);
+                        }
+                        k++;
+                    }
+                    if (pipe(fd1) < 0) {
+                        printf("error\n");
+                        prompt();
+                        continue;
+                    }
+
+                    if (pipe(fd2) < 0) {
+                        printf("error\n");
+                        prompt();
+                        continue;
+                    }
+
+                    pid = fork();
+                    if (pid < 0) {
+                        printf("error\n");
+                        prompt();
+                        continue;
+                    }
+                    if (pid > 0) {
+                        close(fd1[0]);
+                        write(fd1[1],string,strlen(string)+1);
+                        close(fd1[1]);
+                        wait(NULL);
+                        close(fd2[1]);
+                        read(fd2[0],read_string,strlen(read_string+1));
+                        close(fd2[0]);
+                    } else {
+                        close(fd1[1]);
+                        read(fd1[0],read_string,strlen(read_string+1));
+                        k = 0;
+                        close(fd1[0]);
+                        close(fd2[0]);
+                        write(fd2[1],read_string,strlen(read_string+1));
+                        close(fd2[1]);
+                    }
+
+                    addToCommandHistory(line,cmdNo);
+                    cmdNo++;
+                    prompt();
+                    continue;
+                }
+            } // Output
+            else if ()
+        } */
 
         // TODO
         // Code to implement mainloop goes here
@@ -131,7 +350,6 @@ int main(int argc, char *argv[], char *envp[])
         // TODO
 
         // Read and execute commands
-        char **args = tokenise(line," ");
         pid = fork();
 
         if (pid < 0) {
@@ -152,9 +370,12 @@ int main(int argc, char *argv[], char *envp[])
         }
         prompt();
     }
+    printf("debug\n");
     saveCommandHistory();
-    cleanCommandHistory();
-    fclose(fp);
+    printf("debugg\n");
+    // cleanCommandHistory();
+    // fclose(fp);
+    printf("debuggg\n");
     printf("\n");
     return(EXIT_SUCCESS);
 }
