@@ -1,7 +1,7 @@
 // mysh.c ... a small shell
 // Started by John Shepherd, September 2018
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 4 (28/09)
+// Version 5 (30/09)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -105,12 +105,10 @@ int main(int argc, char *argv[], char *envp[])
         // ! History substitution
         /* if (!strcmp(line[0],"!")) {
             if (!strcmp(line[1],"!")) {
-                line = getCommandFromHistory(command-1);
-                char **args = tokenise(line," ");
+                snprintf(line,MAXLINE,"%s",getCommandFromHistory(cmdNo-1));
             } else if (valid number) {
                 find the command
                 line = getCommandFromHistory(command);
-                char **args = tokenise(line," ");
             } else if (invalid number) {
                 printf("No command #%d\n",command number);
                 prompt();
@@ -123,34 +121,55 @@ int main(int argc, char *argv[], char *envp[])
 
         // Expand filename wildcards
         i = 0;
-        char *s = malloc((2*(MAXSTR+1)*sizeof(char)));
+        int j = 0;
+        char *s = malloc((2*(MAXLINE+1)*sizeof(char)));
 
-        while (args[i] != NULL) {
-            if (strchr(args[i],"*") != NULL || strchr(args[i],"?") != NULL
-            || strchr(args[i],"[") != NULL || strchr(args[i],"~") != NULL) {
-                glob_t globbuf = {0};
-                glob(args[i], GLOB_NOCHECK|GLOB_TILDE, NULL, &globbuf);
-                int j = 0;
-                while (j != globbuf.gl_pathc) {
-                    strcat(s,globbuf.gl_pathv[j]);
-                    j++;
+        if (strchr(line,'*') != NULL || strchr(line,'?') != NULL
+        || strchr(line,'[') != NULL || strchr(line,'~') != NULL) {
+            while (args[i] != NULL) {
+                if (strchr(args[i],'*') != NULL || strchr(args[i],'?') != NULL
+                || strchr(args[i],'[') != NULL || strchr(args[i],'~') != NULL) {
+                    glob_t globbuf = {0};
+                    glob(args[i], GLOB_NOCHECK|GLOB_TILDE, NULL, &globbuf);
+                    int j = 0;
+                    while (j != globbuf.gl_pathc) {
+                        strcat(s,globbuf.gl_pathv[j]);
+                        strcat(s," ");
+                        j++;
+                    }
+
+                } else if (i == 0) {
+                    strcpy(s,args[i]);
+                    strcat(s," ");
+                } else {
+                    strcat(s,args[i]);
+                    strcat(s," ");
                 }
-
+                i++;
             }
-
-            if (i == 0) {
-                strcpy(s,args[i]);
-            } else {
-                strcat(s,args[i]);
-            }
-            i++;
+            printf("bloop\n");
+            args = tokenise(s," ");
         }
 
-        //char **args = tokenise(s," ");
+        /* if (strchr(line,"*") != NULL || strchr(line,"?") != NULL
+        || strchr(line,"[") != NULL || strchr(line,"~") != NULL) {
+            if (strchr(line,"*") != NULL) {
+                glob("*",GLOB_TILDE,)
+            } else if (strchr(line,"?") != NULL) {
+
+            } else if (strchr(line,"[") != NULL) {
+
+            } else if (strchr(line,"~") != NULL) {
+                glob("~",GLOB_TILDE)
+            }
+        } */
 
         // Built-in commands
         if (!strcmp(line,"exit")) {
-            break;
+            saveCommandHistory();
+            cleanCommandHistory();
+            printf("\n");
+            return(EXIT_SUCCESS);
         } else if (!strcmp(line,"h") || !strcmp(line,"history")) {
             showCommandHistory();
             addToCommandHistory(line,cmdNo);
@@ -165,7 +184,9 @@ int main(int argc, char *argv[], char *envp[])
             continue;
         } else if (!strcmp(args[0],"cd")) {
             if (!strcmp(line,"cd")) {
-                chdir(getenv("HOME"));
+                printf("bloop de scoop\n");
+                char *test = strdup(getenv("HOME"));
+                chdir(test);
                 printDir();
             } else {
                 chdir(args[1]);
@@ -179,10 +200,10 @@ int main(int argc, char *argv[], char *envp[])
         }
 
         // Check for input/output redirections (WIP)
-        int j = 0;
+        // j = 0;
         int k = 0;
 
-        if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
+        /* if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
             // Input
             printf("wowee\n");
             if (strchr(line,'<') != NULL) {
@@ -259,7 +280,7 @@ int main(int argc, char *argv[], char *envp[])
                 printf("args[j-1] = %s\n",args[j-1]);
                 printf("args[j+1] = %s\n",args[j+1]);
                 /* if (!strcmp(args[j+2],"\0")) {
-                    printf("testu\n"); */
+                    printf("testu\n");
                     int in = open(args[j-1],O_RDONLY);
                     dup2(in,STDIN_FILENO);
                     close(in);
@@ -268,7 +289,7 @@ int main(int argc, char *argv[], char *envp[])
                     close(out);
                 //}
             }
-        }
+        } */
 
         // Unused version (tbc)
         /* if (strchr(line,'<') != NULL || strchr(line,'>') != NULL) {
@@ -359,7 +380,7 @@ int main(int argc, char *argv[], char *envp[])
             wait(&stat);
             freeTokens(args);
         } else {
-            flag = execute(args,path,envp);
+            execute(args,path,envp);
         }
 
         if (flag == 1) {
@@ -368,14 +389,12 @@ int main(int argc, char *argv[], char *envp[])
             addToCommandHistory(line,cmdNo);
             cmdNo++;
         }
+
         prompt();
     }
-    printf("debug\n");
     saveCommandHistory();
-    printf("debugg\n");
-    // cleanCommandHistory();
+    cleanCommandHistory();
     // fclose(fp);
-    printf("debuggg\n");
     printf("\n");
     return(EXIT_SUCCESS);
 }
@@ -508,9 +527,8 @@ int execute(char **args, char **path, char **envp)
 {
     // TODO: implement the find-the-executable and execve() it code
     //    args = tokenise the command line
-
-    // Used to denote if success or failed.
     int flag = 1;
+    // Used to denote if success or failed.
     char* command = NULL;
 //    if (args[0] starts with '/' or '.') {
     if (args[0][0] == '/' || args[0][0] == '.') {
