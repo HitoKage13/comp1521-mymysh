@@ -1,7 +1,7 @@
 // COMP1521 18s2 mysh ... command history
 // Implements an abstract data object
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 4 (30/09)
+// Version 5 (30/09)
 
 // if it reads from a file, & is needed
 // if there's no file, & is NOT needed
