@@ -1,7 +1,7 @@
 // COMP1521 18s2 mysh ... command history
 // Implements an abstract data object
 // Completed by Jeremy Lim (z5209627), September/October 2018
-// Version 2 (28/09)
+// Version 3 (28/09)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,30 +44,30 @@ int initCommandHistory()
     int i = 0;
     CommandHistory.nEntries = 0;
     while (i < MAXHIST) {
-        // CommandHistory.commands[i].commandLine = malloc((MAXSTR+1)*sizeof(char));
+        CommandHistory.commands[i].commandLine = malloc((MAXSTR+1)*sizeof(char));
         CommandHistory.commands[i].seqNumber = -1;
         i++;
     }
     FILE *history;
     char string[MAXSTR];
     char number[MAXSTR];
-    char *file = strdup("$HOME/.mymysh_history");
+
+    char *file = malloc(MAXSTR*sizeof(char));
+    file = getenv("HOME");
+    strcat(file,"/.mymysh_history");
     history = fopen(file,"r");
     if (history == NULL) {
+        // history = fopen(file,"w");
         return 1;
     } else {
         i = 0;
         while (fgets(string,MAXSTR,history) != NULL) {
-            sscanf(number,string);
-            int j = atoi(number);
-            printf("j = %d\n",j);
-            CommandHistory.commands[i].seqNumber = j;
-            CommandHistory.commands[i].commandLine = strdup(string);
+            sscanf(string," %3d %s\n",&CommandHistory.commands[i].seqNumber,&CommandHistory.commands[i].commandLine);
             i++;
         }
+        CommandHistory.nEntries = i;
+        fclose(history);
     }
-
-    fclose(history);
 
     return CommandHistory.commands[i-1].seqNumber;
 }
@@ -95,22 +95,61 @@ void addToCommandHistory(char *cmdLine, int seqNo)
     else if (CommandHistory.nEntries == MAXHIST) {
         // Shifts all entries up one.
         while (i < MAXHIST - 1) {
+            printf("i = %d\n",i);
+            printf("seqNumber: %d\n",CommandHistory.commands[i].seqNumber);
+            printf("commandLine: %s\n\n",&CommandHistory.commands[i].commandLine);
+            printf("seqNumber: %d\n",CommandHistory.commands[i+1].seqNumber);
+            printf("commandLine: %s\n\n",&CommandHistory.commands[i+1].commandLine);
+            printf("bugo\n");
+            free(CommandHistory.commands[i].commandLine);
+            CommandHistory.commands[i].commandLine = malloc((MAXSTR+1)*sizeof(char));
+            strcpy(CommandHistory.commands[i].commandLine,CommandHistory.commands[i+1].commandLine);
             CommandHistory.commands[i].seqNumber = CommandHistory.commands[i+1].seqNumber;
-            CommandHistory.commands[i].commandLine = strdup(CommandHistory.commands[i+1].commandLine);
             i++;
         }
-        CommandHistory.commands[index-1].commandLine = strdup(cmdLine);
-        CommandHistory.commands[index-1].seqNumber = seqNo;
+        free(CommandHistory.commands[MAXHIST-1].commandLine);
+        CommandHistory.commands[MAXHIST-1].commandLine = malloc((MAXSTR+1)*sizeof(char));
+        strcpy(CommandHistory.commands[MAXHIST-1].commandLine,cmdLine);
+        CommandHistory.commands[MAXHIST-1].seqNumber = seqNo;
     }
+
+    /* if (CommandHistory.nEntries == MAXHIST)
+	{
+		for (int i = 0; i < MAXHIST - 1; i++)
+		{
+			free(CommandHistory.commands[i].commandLine);
+			CommandHistory.commands[i].commandLine = strdup(CommandHistory.commands[i + 1].commandLine);
+			CommandHistory.commands[i].seqNumber = CommandHistory.commands[i + 1].seqNumber;
+		}
+
+		free(CommandHistory.commands[MAXHIST-1].commandLine);
+		CommandHistory.commands[MAXHIST-1].commandLine = strdup(cmdLine);
+		CommandHistory.commands[MAXHIST-1].seqNumber = seqNo;
+	}
+	else
+	{
+		CommandHistory.commands[CommandHistory.nEntries].commandLine = strdup(cmdLine);
+		CommandHistory.commands[CommandHistory.nEntries].seqNumber = seqNo;
+
+		CommandHistory.nEntries++;
+	} */
 }
 
 // showCommandHistory()
 // - display the list of
 
-void showCommandHistory(FILE *outf)
+void showCommandHistory()
 {
     // TODO
+    // New version
     int i = 0;
+    while (i < CommandHistory.nEntries) {
+        printf(" %3d  %s\n",CommandHistory.commands[i].seqNumber,CommandHistory.commands[i].commandLine);
+        i++;
+    }
+
+    // Old version
+    /* int i = 0;
     char *file = strdup(HISTFILE);
     outf = fopen(file,"r");
     char string[MAXSTR];
@@ -118,7 +157,7 @@ void showCommandHistory(FILE *outf)
         printf("%s\n",string);
         i++;
     }
-    fclose(outf);
+    fclose(outf); */
 }
 
 // getCommandFromHistory()
@@ -147,18 +186,29 @@ void saveCommandHistory()
 {
     // TODO
     FILE *history;
-    char *file = strdup("$HOME/.mymysh_history");
+    char *file = malloc(MAXSTR*sizeof(char));
+    file = getenv("HOME");
+    strcat(file,"/.mymysh_history");
     int i = 0;
     printf("bugde\n");
     history = fopen(file,"a");
     printf("bugdee\n");
+    printf("nentries = %d\n",CommandHistory.nEntries);
     while (i < CommandHistory.nEntries) {
-        fprintf(history," %d ",CommandHistory.commands[i].seqNumber);
-        fprintf(history,"%s\n",CommandHistory.commands[i].commandLine);
+        printf("i = %d\n",i);
+        printf("seqno = %d\n",CommandHistory.commands[i].seqNumber);
+        printf("comline = %s\n",CommandHistory.commands[i].commandLine);
+        i++;
+    }
+    i = 0;
+    while (i < CommandHistory.nEntries) {
+        printf("seqno = %d\n",CommandHistory.commands[i].seqNumber);
+        printf("comline = %s\n",CommandHistory.commands[i].commandLine);
+        fprintf(history," %3d %s\n",CommandHistory.commands[i].seqNumber,&CommandHistory.commands[i].commandLine);
         i++;
     }
     printf("bugdeee\n");
-    // fclose(history);
+    fclose(history);
     printf("buhdee\n");
     /* if (getenv(file) != NULL) {
         history = fopen(file,"w");
